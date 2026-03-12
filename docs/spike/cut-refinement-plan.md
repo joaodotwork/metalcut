@@ -164,11 +164,30 @@ Evaluation harness built (`tools/evaluate.py`). First annotation pass on test vi
 
 **Key finding:** 100% recall (all real cuts found), but 76 false positives — mostly in explosion/high-motion sequences where sustained high scores mimic cuts.
 
-### Phase 3 — In Progress
+### Phase 3 — Complete
 
-**Goal:** Adaptive thresholding to distinguish high-motion continuous shots from editorial cuts. The rolling baseline should rise during action sequences so only genuine scene changes break through.
+**Goal:** Adaptive thresholding to distinguish high-motion continuous shots from editorial cuts.
 
 **Constraint:** Must NOT use min_cut_distance to suppress false positives — rapid-fire editorial cuts (e.g., Hitchcock's Psycho shower scene) are legitimate and must be preserved.
+
+**Approach:** Two-pass lookahead with IQR-based damping.
+
+1. **Two-pass architecture:** Score all frames first (Pass 1), then determine cuts with full lookahead context — ±15 frames before AND after each candidate (Pass 2). Eliminates the "first volley" problem of trailing-window approaches.
+
+2. **IQR-based damping:** Neighborhood p75 + margin sets the adaptive threshold, but the margin is dampened proportionally to the neighborhood's IQR/p75 ratio (spread). High spread (bimodal: spikes + zeros) = rapid-fire cuts → less margin. Low spread (uniformly elevated) = sustained action → full margin.
+
+3. **Performance cost:** ~2x processing time (second video read for clip creation), negligible for the current 9s baseline.
+
+**Results (sensitivity 0.7, max mode, 97s anime test clip):**
+
+| Approach | Detections | TP | FP | FN | P | R | F1 |
+|----------|-----------|----|----|----|----|---|----|
+| Baseline (no adaptive) | 100 | 24 | 76 | 0 | 24.0% | 100% | 38.7% |
+| Trailing window (p75) | 85 | 22 | 63 | 2 | 25.9% | 91.7% | 40.4% |
+| Lookahead (no damping) | 47 | 15 | 32 | 9 | 31.9% | 62.5% | 42.3% |
+| **Lookahead + IQR damping** | **53** | **19** | **34** | **5** | **35.8%** | **79.2%** | **49.4%** |
+
+**Remaining FP sources (34 FPs):** Mostly isolated single-frame spikes where explosion/action frame changes score identically to real scene changes. Frame-difference metrics alone cannot distinguish these — would require semantic understanding of scene content (see #2).
 
 ## Out of Scope
 
