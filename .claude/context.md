@@ -7,10 +7,9 @@ Branch: main
 Deployment: development
 
 ## Uncommitted Work
-```
-?? .DS_Store
-```
+**Status:** Clean working tree
 
+**Last Commit:** 64c2664 - Add .DS_Store to .gitignore and remove tracked ones (0 seconds ago)
 ## What's Being Built
 - **Recent work:** Initial commit: metalcut - GPU-accelerated video cut detection for Apple Silicon
 
@@ -20,7 +19,11 @@ Deployment: development
 
 
 ## Key Files to Know
-- [Important entry points, configuration files, and core modules]
+- `.gitignore` - Core logic (modified 2x recently)
+- `data/.DS_Store` - Core logic (modified 2x recently)
+- `data/videos/.DS_Store` - Core logic (modified 2x recently)
+- `src/.DS_Store` - Core logic (modified 2x recently)
+
 
 ## Active Patterns
 - Documentation updates
@@ -34,6 +37,7 @@ Deployment: development
 3. Deploy to staging
 
 ## Recent Activity
+- **2026-03-12**: 64c2664 - Add .DS_Store to .gitignore and remove tracked ones
 - **2026-03-12**: 7997057 - Initial commit: metalcut - GPU-accelerated video cut detection for Apple Silicon
 - **2026-03-12**: Initial Seiva context setup
 
