@@ -127,17 +127,39 @@ def process_video(input_path: str,
     
     return cuts
 
+def load_config(config_path: Optional[str] = None) -> dict:
+    """Load configuration from JSON file.
+
+    Args:
+        config_path: Path to config file. Falls back to config/default_config.json.
+
+    Returns:
+        Configuration dict, or empty dict if no config found.
+    """
+    if config_path:
+        path = Path(config_path)
+    else:
+        path = Path(__file__).parent.parent.parent / "config" / "default_config.json"
+
+    if path.exists():
+        with open(path) as f:
+            return json.load(f)
+    return {}
+
+
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(description="metalcut - GPU-accelerated video cut detection for Apple Silicon")
-    
+
     parser.add_argument("--input", required=True, help="Input video path")
     parser.add_argument("--output-dir", "-o", default="output",
                        help="Output directory for clips")
-    parser.add_argument("--sensitivity", "-s", type=float, default=0.5,
-                       help="Detection sensitivity (0.0-1.0)")
-    parser.add_argument("--min-cut-distance", "-d", type=float, default=0.5,
-                       help="Minimum distance between cuts (seconds)")
+    parser.add_argument("--config", default=None,
+                       help="Path to config JSON (default: config/default_config.json)")
+    parser.add_argument("--sensitivity", "-s", type=float, default=None,
+                       help="Detection sensitivity (0.0-1.0), overrides config")
+    parser.add_argument("--min-cut-distance", "-d", type=float, default=None,
+                       help="Minimum distance between cuts (seconds), overrides config")
     parser.add_argument("--preview", "-p", action="store_true",
                        help="Show preview window")
     parser.add_argument("--create-clips", "-c", action="store_true",
@@ -146,12 +168,23 @@ def main():
                        help="Enable debug output")
     parser.add_argument("--output-json", action="store_true",
                        help="Save cuts data to JSON file")
-    
+
     args = parser.parse_args()
-    
+
     # Setup logging
     setup_logging(args.debug)
-    
+
+    # Load config, then let CLI args override
+    config = load_config(args.config)
+    detection_cfg = config.get("detection", {})
+
+    sensitivity = args.sensitivity if args.sensitivity is not None else detection_cfg.get("sensitivity", 0.5)
+    min_cut_distance = args.min_cut_distance if args.min_cut_distance is not None else detection_cfg.get("min_cut_distance", 0.5)
+
+    if args.debug:
+        logger.debug(f"Config: {config}")
+        logger.debug(f"Effective sensitivity={sensitivity}, min_cut_distance={min_cut_distance}")
+
     try:
         # Validate input
         input_path = Path(args.input)
@@ -169,8 +202,8 @@ def main():
         cuts = process_video(
             str(input_path),
             str(output_dir),
-            sensitivity=args.sensitivity,
-            min_cut_distance=args.min_cut_distance,
+            sensitivity=sensitivity,
+            min_cut_distance=min_cut_distance,
             preview=args.preview,
             create_clips=args.create_clips,
             debug=args.debug
@@ -183,8 +216,8 @@ def main():
             json_output = {
                 "video_path": str(input_path),
                 "parameters": {
-                    "sensitivity": args.sensitivity,
-                    "min_cut_distance": args.min_cut_distance
+                    "sensitivity": sensitivity,
+                    "min_cut_distance": min_cut_distance
                 },
                 "processing_time": processing_time,
                 "cuts": cuts,
