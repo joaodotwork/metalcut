@@ -1,8 +1,22 @@
 {
     "detection": {
-        "quick_threshold": 30.0,
-        "detailed_threshold": 20.0,
-        "min_cut_distance": 0.15
+        "sensitivity": 0.5,
+        "min_cut_distance": 0.15,
+        "quick_gate": 10.0,
+        "downscale_width": 64,
+        "downscale_height": 36,
+        "canny_low": 100,
+        "canny_high": 200,
+        "histogram_bins": 64,
+        "weight_quick": 0.4,
+        "weight_histogram": 0.4,
+        "weight_edge": 0.2,
+        "temporal_window": 5,
+        "temporal_boost_factor": 0.25,
+        "quick_threshold_base": 15.0,
+        "quick_threshold_range": 20.0,
+        "detailed_threshold_base": 20.0,
+        "detailed_threshold_range": 30.0
     },
     "processing": {
         "batch_size": 32,

@@ -9,6 +9,7 @@ import sys
 import cv2
 import json
 
+from ..core.config import DetectionConfig
 from ..core.detector import CutDetector
 from ..core.accelerator import MetalAccelerator
 from ..io.video_reader import VideoReader
@@ -30,6 +31,7 @@ def setup_logging(debug: bool = False):
 
 def process_video(input_path: str,
                  output_dir: str,
+                 config: Optional[DetectionConfig] = None,
                  sensitivity: float = 0.5,
                  min_cut_distance: float = 0.5,
                  preview: bool = False,
@@ -38,9 +40,10 @@ def process_video(input_path: str,
     """Process video and detect cuts."""
     # Initialize components
     accelerator = MetalAccelerator()
+    if config is None:
+        config = DetectionConfig(sensitivity=sensitivity, min_cut_distance=min_cut_distance)
     detector = CutDetector(
-        sensitivity=sensitivity,
-        min_cut_distance=min_cut_distance,
+        config=config,
         use_gpu=accelerator.metal_available
     )
     
@@ -174,16 +177,17 @@ def main():
     # Setup logging
     setup_logging(args.debug)
 
-    # Load config, then let CLI args override
-    config = load_config(args.config)
-    detection_cfg = config.get("detection", {})
-
-    sensitivity = args.sensitivity if args.sensitivity is not None else detection_cfg.get("sensitivity", 0.5)
-    min_cut_distance = args.min_cut_distance if args.min_cut_distance is not None else detection_cfg.get("min_cut_distance", 0.5)
+    # Build DetectionConfig from file + CLI overrides
+    raw_config = load_config(args.config)
+    detection_config = DetectionConfig.from_config_dict(
+        raw_config,
+        sensitivity=args.sensitivity,
+        min_cut_distance=args.min_cut_distance,
+    )
 
     if args.debug:
-        logger.debug(f"Config: {config}")
-        logger.debug(f"Effective sensitivity={sensitivity}, min_cut_distance={min_cut_distance}")
+        logger.debug(f"Raw config: {raw_config}")
+        logger.debug(f"DetectionConfig: {detection_config}")
 
     try:
         # Validate input
@@ -202,8 +206,7 @@ def main():
         cuts = process_video(
             str(input_path),
             str(output_dir),
-            sensitivity=sensitivity,
-            min_cut_distance=min_cut_distance,
+            config=detection_config,
             preview=args.preview,
             create_clips=args.create_clips,
             debug=args.debug
@@ -216,8 +219,10 @@ def main():
             json_output = {
                 "video_path": str(input_path),
                 "parameters": {
-                    "sensitivity": sensitivity,
-                    "min_cut_distance": min_cut_distance
+                    "sensitivity": detection_config.sensitivity,
+                    "min_cut_distance": detection_config.min_cut_distance,
+                    "quick_threshold": detection_config.quick_threshold,
+                    "detailed_threshold": detection_config.detailed_threshold,
                 },
                 "processing_time": processing_time,
                 "cuts": cuts,
