@@ -132,25 +132,29 @@ class FrameMetrics:
             return 0.0
 
     @staticmethod
-    def combined_difference(frame1: np.ndarray, frame2: np.ndarray) -> Tuple[float, dict]:
+    def combined_difference(frame1: Union[np.ndarray, cv2.UMat],
+                           frame2: Union[np.ndarray, cv2.UMat]) -> Tuple[float, dict]:
         """Calculate combined difference score using multiple metrics.
-        
+
         Args:
-            frame1: First frame
-            frame2: Second frame
-            
+            frame1: First frame (ndarray or UMat)
+            frame2: Second frame (ndarray or UMat)
+
         Returns:
             Tuple[float, dict]: Combined score and individual metrics
         """
-        # Calculate individual metrics
+        # Calculate individual metrics (quick_difference handles UMat natively)
         quick_score = FrameMetrics.quick_difference(frame1, frame2)
-        
+
         # Only calculate more expensive metrics if quick score indicates potential cut
         metrics = {'quick_score': quick_score}
-        
+
         if quick_score > 10.0:  # Threshold for additional analysis
-            hist_score = FrameMetrics.histogram_difference(frame1, frame2)
-            edge_score = FrameMetrics.edge_difference(frame1, frame2)
+            # histogram_difference and edge_difference require np.ndarray
+            f1 = frame1.get() if isinstance(frame1, cv2.UMat) else frame1
+            f2 = frame2.get() if isinstance(frame2, cv2.UMat) else frame2
+            hist_score = FrameMetrics.histogram_difference(f1, f2)
+            edge_score = FrameMetrics.edge_difference(f1, f2)
             
             metrics.update({
                 'histogram_score': hist_score,
