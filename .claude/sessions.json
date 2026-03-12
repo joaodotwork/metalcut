@@ -1,6 +1,20 @@
 {
-  "active": [],
+  "active": [
+    {
+      "id": "spike/cut-refinement",
+      "focus": "Cut detection refinement - temporal scoring, UMat bug, eval harness, adaptive thresholds",
+      "branch": "spike/cut-refinement",
+      "worktree": "/Users/joao/Dev/metalcut-session-spike/cut-refinement",
+      "areas": [
+        "src/core src/io tools config"
+      ],
+      "createdAt": "2026-03-12T10:33:00+0100",
+      "issues": [
+        "1"
+      ]
+    }
+  ],
   "closed": [],
   "schema_version": "2.0",
-  "last_updated": null
+  "last_updated": "2026-03-12T10:33:01+0100"
 }

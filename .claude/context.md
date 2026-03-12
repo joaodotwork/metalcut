@@ -9,7 +9,7 @@ Deployment: development
 ## Uncommitted Work
 **Status:** Clean working tree
 
-**Last Commit:** 64c2664 - Add .DS_Store to .gitignore and remove tracked ones (0 seconds ago)
+**Last Commit:** 8da698e - Update local context tracking (0 seconds ago)
 ## What's Being Built
 - **Recent work:** Initial commit: metalcut - GPU-accelerated video cut detection for Apple Silicon
 
@@ -37,10 +37,11 @@ Deployment: development
 3. Deploy to staging
 
 ## Recent Activity
-- **2026-03-12**: 5d5e810 - Fix mermaid diagram: vertical layout and proper multiline labels
-- **2026-03-12**: 64c2664 - Add .DS_Store to .gitignore and remove tracked ones
-- **2026-03-12**: 7997057 - Initial commit: metalcut - GPU-accelerated video cut detection for Apple Silicon
-- **2026-03-12**: Initial Seiva context setup
+- **2026-03-12**: 8da698e - Update local context tracking
+- **2026-03-12**: 99265aa - Update README with two-pass architecture and full CLI reference
+- **2026-03-12**: 7d631ae - Wire up --preview flag with real-time video playback
+- **2026-03-12**: eb21e1b - Add dissolve/fade detection with FP filtering (Phase 4)
+- **2026-03-12**: 12eed03 - Update spike plan with Phase 3 results
 
 ## Cost-Effective Context Strategy
 **For AI assistants:**
