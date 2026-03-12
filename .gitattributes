@@ -1,0 +1,10 @@
+# Plantas + Seiva: Union merge strategy for coordination files
+# These files accumulate changes from all sessions/branches
+.claude/context.md merge=union
+.claude/sessions.json merge=union
+.plantas/context.md merge=union
+.plantas/sessions.json merge=union
+
+# Help resolve conflicts when config dir is a symlink (worktrees)
+.claude merge=keep-symlink
+.plantas merge=keep-symlink

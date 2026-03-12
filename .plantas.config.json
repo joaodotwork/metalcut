@@ -1,0 +1,11 @@
+{
+  "configDir": ".claude",
+  "sessionsFile": ".claude/sessions.json",
+  "worktreePrefix": "session-",
+  "timestampFormat": "HH:mm",
+  "defaultAreas": "general",
+  "hooks": {
+    "onStart": null,
+    "onEnd": null
+  }
+}

@@ -1,0 +1,15 @@
+{
+    "detection": {
+        "quick_threshold": 30.0,
+        "detailed_threshold": 20.0,
+        "min_cut_distance": 0.15
+    },
+    "processing": {
+        "batch_size": 32,
+        "buffer_size": 64
+    },
+    "output": {
+        "preview_scale": 0.5,
+        "debug_visualization": false
+    }
+}
