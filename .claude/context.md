@@ -37,7 +37,6 @@ Deployment: development
 3. Deploy to staging
 
 ## Recent Activity
-- **2026-03-12**: 5d5e810 - Fix mermaid diagram: vertical layout and proper multiline labels
 - **2026-03-12**: 64c2664 - Add .DS_Store to .gitignore and remove tracked ones
 - **2026-03-12**: 7997057 - Initial commit: metalcut - GPU-accelerated video cut detection for Apple Silicon
 - **2026-03-12**: Initial Seiva context setup

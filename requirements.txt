@@ -3,4 +3,5 @@ numpy>=1.24.0
 tqdm>=4.65.0
 rich>=13.5.0
 keyboard>=0.13.5
-yt-dlp>=2023.11.16
+yt-dlp @ https://github.com/bashonly/yt-dlp/archive/refs/heads/feat/youtube/sabr.zip
+protobuf>=4.21.0
