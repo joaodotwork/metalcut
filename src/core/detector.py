@@ -53,22 +53,29 @@ class CutDetector:
             self.recent_scores.pop(0)
             
     def _get_temporal_score(self) -> float:
-        """Calculate temporal-aware score based on recent history."""
-        if not self.recent_scores:
+        """Calculate temporal-aware score based on recent history.
+
+        Returns a bounded boost factor (0.0 to 1.0) based on whether the
+        current score represents a sudden jump relative to recent history.
+        """
+        if len(self.recent_scores) < 2:
             return 0.0
-            
-        # Calculate trend (increasing scores indicate potential cut)
-        trend = np.gradient(self.recent_scores).mean() if len(self.recent_scores) > 1 else 0
-        
-        # Calculate temporal score
+
         current = self.recent_scores[-1]
-        avg = np.mean(self.recent_scores)
-        std = np.std(self.recent_scores) if len(self.recent_scores) > 1 else 0
-        
-        # Boost score if there's a sudden increase
-        temporal_score = current * (1.0 + max(0, trend)) * (1.0 + std)
-        
-        return temporal_score
+        avg = np.mean(self.recent_scores[:-1])
+        std = np.std(self.recent_scores[:-1])
+
+        # How many standard deviations above the recent average?
+        # High deviation = likely a real cut, not sustained motion.
+        if std > 0:
+            z_score = (current - avg) / std
+        else:
+            z_score = 0.0 if current <= avg else 2.0
+
+        # Clamp to [0, 1] — acts as a bounded boost factor
+        temporal_boost = min(1.0, max(0.0, z_score / 3.0))
+
+        return temporal_boost
         
     def detect_cut(self, frame: Union[np.ndarray, cv2.UMat]) -> Tuple[bool, Dict[str, float]]:
         """Detect if current frame is a cut point."""
@@ -99,9 +106,9 @@ class CutDetector:
         temporal_score = self._get_temporal_score()
         metrics_dict['temporal_score'] = temporal_score
         
-        # Final decision
+        # Final decision — additive boost, bounded by temporal_score in [0, 1]
         is_cut = False
-        final_score = quick_score * (1.0 + 0.5 * temporal_score)
+        final_score = quick_score + (temporal_score * self.detailed_threshold * 0.25)
         metrics_dict['final_score'] = final_score
         
         if final_score > self.detailed_threshold:
