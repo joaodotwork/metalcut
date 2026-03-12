@@ -7,6 +7,7 @@ from rich.progress import Progress, TextColumn, BarColumn, TimeRemainingColumn
 from rich.logging import RichHandler
 import sys
 import cv2
+import numpy as np
 import json
 
 from ..core.config import DetectionConfig
@@ -154,6 +155,89 @@ def process_video(input_path: str,
 
     # Extract hard cut timestamps for backwards compat
     cuts = [t['timestamp'] for t in transitions if t['type'] == 'hard_cut']
+
+    # Preview pass (optional): Replay video with transition annotations
+    if preview:
+        # Build lookup: frame_number → transition info
+        transition_frames = {}
+        for t in transitions:
+            transition_frames[t['frame']] = t
+
+        # Color per transition type
+        type_colors = {
+            'hard_cut': (0, 0, 255),       # Red
+            'dissolve': (0, 165, 255),      # Orange
+            'fade_to_black': (255, 100, 0), # Blue-ish
+            'fade_from_black': (0, 255, 255), # Yellow
+        }
+        type_labels = {
+            'hard_cut': 'CUT',
+            'dissolve': 'DISSOLVE',
+            'fade_to_black': 'FADE OUT',
+            'fade_from_black': 'FADE IN',
+        }
+
+        flash_duration = int(fps * 0.5)  # Show label for 0.5s
+        wait_ms = max(1, int(1000 / fps))  # Real-time playback
+        active_label = None
+        active_color = None
+        flash_countdown = 0
+
+        with VideoReader(input_path) as reader:
+            with Progress(
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+                TimeRemainingColumn(),
+            ) as progress:
+                task = progress.add_task("Preview...", total=total_frames)
+
+                for frame in reader.read_frames():
+                    frame_num = reader.frame_count
+                    frame_idx = frame_num - 1  # 0-based index into scores
+
+                    # Get score for this frame
+                    score = detector.all_scores[frame_idx] if frame_idx < len(detector.all_scores) else 0.0
+
+                    # Check for transition at this frame
+                    if frame_num in transition_frames:
+                        t = transition_frames[frame_num]
+                        active_label = type_labels.get(t['type'], t['type'])
+                        active_color = type_colors.get(t['type'], (255, 255, 255))
+                        flash_countdown = flash_duration
+
+                    # Build preview frame
+                    display = frame.copy() if isinstance(frame, np.ndarray) else frame.get().copy()
+
+                    # Score bar at bottom
+                    h, w = display.shape[:2]
+                    bar_y = h - 8
+                    score_width = int(w * min(score / 100.0, 1.0))
+                    bar_color = (0, 255, 0) if score < config.detailed_threshold else (0, 0, 255)
+                    cv2.rectangle(display, (0, bar_y), (score_width, h), bar_color, -1)
+
+                    # Score text
+                    timestamp = frame_num / fps
+                    score_text = f"{timestamp:.2f}s  score: {score:.1f}"
+                    cv2.putText(display, score_text, (10, 25),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1,
+                                lineType=cv2.LINE_AA)
+
+                    # Flash transition label
+                    if flash_countdown > 0:
+                        cv2.putText(display, active_label, (w // 2 - 60, h // 2),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 1.2, active_color, 3,
+                                    lineType=cv2.LINE_AA)
+                        flash_countdown -= 1
+
+                    cv2.imshow("metalcut preview", display)
+                    key = cv2.waitKey(wait_ms) & 0xFF
+                    if key == ord('q') or key == 27:  # q or ESC
+                        break
+
+                    progress.update(task, advance=1)
+
+        cv2.destroyAllWindows()
 
     # Pass 3 (optional): Create clips at known cut points (hard cuts only)
     if create_clips:
