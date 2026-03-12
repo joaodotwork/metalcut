@@ -46,6 +46,15 @@ class DetectionConfig:
     adaptive_percentile: float = 75.0  # Percentile of neighborhood scores
     adaptive_margin: float = 12.0  # Score must exceed neighborhood_percentile + margin to be a cut
 
+    # Dissolve detection — sustained mid-range scores over N frames
+    dissolve_min_frames: int = 8  # Minimum frames of elevated scores for a dissolve
+    dissolve_score_floor: float = 3.0  # Minimum score to count as "active"
+
+    # Fade detection — luminance trending to/from black
+    fade_luminance_threshold: float = 15.0  # Mean luminance below this = "dark" (0-255)
+    fade_min_frames: int = 15  # Minimum frames for a fade transition (~0.5s at 24fps)
+    fade_luminance_drop: float = 30.0  # Luminance must change by at least this much
+
     # Threshold ranges derived from sensitivity:
     #   quick_threshold = quick_base + (1 - sensitivity) * quick_range
     #   detailed_threshold = detailed_base + (1 - sensitivity) * detailed_range
@@ -96,6 +105,11 @@ class DetectionConfig:
             "lookahead_frames": "lookahead_frames",
             "adaptive_percentile": "adaptive_percentile",
             "adaptive_margin": "adaptive_margin",
+            "dissolve_min_frames": "dissolve_min_frames",
+            "dissolve_score_floor": "dissolve_score_floor",
+            "fade_luminance_threshold": "fade_luminance_threshold",
+            "fade_min_frames": "fade_min_frames",
+            "fade_luminance_drop": "fade_luminance_drop",
         }
 
         for config_key, field_name in field_map.items():

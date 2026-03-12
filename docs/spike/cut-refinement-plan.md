@@ -189,6 +189,38 @@ Evaluation harness built (`tools/evaluate.py`). First annotation pass on test vi
 
 **Remaining FP sources (34 FPs):** Mostly isolated single-frame spikes where explosion/action frame changes score identically to real scene changes. Frame-difference metrics alone cannot distinguish these — would require semantic understanding of scene content (see #2).
 
+### Phase 4 — Complete
+
+**Goal:** Detect dissolves (cross-fades between shots) and fades (to/from black).
+
+**Approach:**
+
+1. **Dissolve detection:** Find sustained runs of mid-range scores (above `dissolve_score_floor`, below hard-cut threshold) lasting `dissolve_min_frames`+ consecutive frames. Report midpoint as transition timestamp.
+
+2. **Fade detection:** Track per-frame mean luminance. Find dark regions (luminance < 15), then check for luminance declining into the dark region (fade-to-black) or rising out of it (fade-from-black). Requires `fade_luminance_drop` (30+) over `fade_min_frames`.
+
+3. **Three filters to reduce false positives:**
+   - **Post-cut exclusion:** Dissolve runs within `dissolve_min_frames` of a hard cut are rejected — these are post-cut settling, not gradual transitions.
+   - **Bell-curve shape check:** The peak score in a dissolve run must not be in the first 25% of frames. Real dissolves ramp up then down; post-cut settling decays from the start.
+   - **Fade minimum duration:** `fade_min_frames` raised from 5 to 15 (~0.63s at 24fps). Brief dark flashes between action shots are not editorial fades.
+
+**Results (sensitivity 0.7, max mode, 97s anime test clip):**
+
+| Stage | Dissolves | Fades | Notes |
+|-------|-----------|-------|-------|
+| Initial (no filters) | 9 | 4 | Most dissolves = explosion aftermath, camera pans, post-cut settling |
+| + Post-cut exclusion | 5 | 4 | Killed: 19.23s, 25.02s, 48.01s, 50.97s (all near hard cuts) |
+| + Bell-curve shape | 4 | 4 | Killed: 26.36s (camera pan — flat plateau, peak at start) |
+| + Fade min duration | 4 | 3 | Killed: 18.94s fade_from_black (4 frames, too short) |
+
+**Final: 53 hard cuts + 4 dissolves + 3 fades = 60 transitions** (6.46s processing time).
+
+Hard cut count unchanged from Phase 3 — no regression.
+
+**Remaining dissolve FP sources:** Oscillating animation patterns (66.07s) and near-ceiling spikes (73.16s, score 28.9 vs ceiling 29.0) pass the filters by coincidence. Further improvement would require either visual verification or semantic understanding.
+
+**Frame skipping (item 8):** Not implemented — hard to validate with 24fps test content and the current 6.5s processing time doesn't justify the complexity.
+
 ## Out of Scope
 
 - Multi-GPU / distributed processing

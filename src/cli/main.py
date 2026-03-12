@@ -99,12 +99,16 @@ def process_video(input_path: str,
                  min_cut_distance: float = 0.5,
                  preview: bool = False,
                  create_clips: bool = False,
-                 debug: bool = False) -> List[float]:
+                 debug: bool = False) -> tuple:
     """Process video with two-pass detection.
 
     Pass 1: Score every frame (fast — GPU-accelerated).
-    Pass 2: Determine cuts with lookahead context.
+    Pass 2: Detect all transitions (hard cuts, dissolves, fades).
     Pass 3 (optional): Re-read video to create clips at known cut points.
+
+    Returns:
+        (cuts, transitions) — cuts is a list of timestamps (floats) for
+        backwards compat; transitions is the full list of transition dicts.
     """
     # Initialize components
     accelerator = MetalAccelerator()
@@ -133,16 +137,27 @@ def process_video(input_path: str,
                 detector.score_frame(frame, frame_number=reader.frame_count)
                 progress.update(task, advance=1)
 
-    # Pass 2: Detect cuts with lookahead
-    cut_results = detector.detect_cuts()
-    cuts = [timestamp for _, timestamp in cut_results]
+    # Pass 2: Detect all transitions
+    transitions = detector.detect_transitions()
 
-    for i, (frame_num, cut_time) in enumerate(cut_results, 1):
-        logger.info(f"Cut detected at {cut_time:.2f}s")
+    # Log results by type
+    type_counts = {}
+    for t in transitions:
+        ttype = t['type']
+        type_counts[ttype] = type_counts.get(ttype, 0) + 1
+        if ttype == 'hard_cut':
+            logger.info(f"Hard cut at {t['timestamp']:.2f}s")
+        elif ttype == 'dissolve':
+            logger.info(f"Dissolve at {t['timestamp']:.2f}s (duration: {t['duration']:.2f}s, avg_score: {t['avg_score']:.1f})")
+        elif ttype in ('fade_to_black', 'fade_from_black'):
+            logger.info(f"{ttype.replace('_', ' ').title()} at {t['timestamp']:.2f}s (duration: {t['duration']:.2f}s)")
 
-    # Pass 3 (optional): Create clips at known cut points
+    # Extract hard cut timestamps for backwards compat
+    cuts = [t['timestamp'] for t in transitions if t['type'] == 'hard_cut']
+
+    # Pass 3 (optional): Create clips at known cut points (hard cuts only)
     if create_clips:
-        cut_frame_set = set(frame_num for frame_num, _ in cut_results)
+        cut_frame_set = set(t['frame'] for t in transitions if t['type'] == 'hard_cut')
 
         with VideoReader(input_path) as reader:
             writer = ClipWriter(output_dir, fps=fps, parallel=True)
@@ -184,7 +199,7 @@ def process_video(input_path: str,
                         fps
                     )
 
-    return cuts
+    return cuts, transitions
 
 def load_config(config_path: Optional[str] = None) -> dict:
     """Load configuration from JSON file.
@@ -269,7 +284,7 @@ def main():
         # Process video
         start_time = time.time()
         
-        cuts = process_video(
+        cuts, transitions = process_video(
             str(input_path),
             str(output_dir),
             config=detection_config,
@@ -277,11 +292,21 @@ def main():
             create_clips=args.create_clips,
             debug=args.debug
         )
-        
+
         processing_time = time.time() - start_time
-        
+
         # Generate JSON output if requested
         if args.output_json:
+            # Build clean transition list for JSON (remove internal fields)
+            json_transitions = []
+            for t in transitions:
+                entry = {'timestamp': t['timestamp'], 'type': t['type']}
+                if 'duration' in t:
+                    entry['duration'] = t['duration']
+                if 'avg_score' in t:
+                    entry['avg_score'] = t['avg_score']
+                json_transitions.append(entry)
+
             json_output = {
                 "video_path": str(input_path),
                 "parameters": {
@@ -292,19 +317,21 @@ def main():
                 },
                 "processing_time": processing_time,
                 "cuts": cuts,
+                "transitions": json_transitions,
                 "metadata": {
                     "total_cuts": len(cuts),
+                    "total_transitions": len(transitions),
                     "timestamp": time.strftime('%Y-%m-%d %H:%M:%S')
                 }
             }
-            
+
             # Create output directory if it doesn't exist
             json_dir = output_dir / "json"
             json_dir.mkdir(parents=True, exist_ok=True)
-            
+
             # Generate JSON filename
             json_path = json_dir / f"cuts_{input_path.stem}_{time.strftime('%Y%m%d_%H%M%S')}.json"
-            
+
             # Save JSON file
             try:
                 with open(json_path, 'w') as f:
@@ -312,17 +339,18 @@ def main():
                 logger.info(f"Cuts data saved to: {json_path}")
             except Exception as e:
                 logger.error(f"Error saving JSON file: {e}")
-        
+
         # Print summary
+        type_counts = {}
+        for t in transitions:
+            type_counts[t['type']] = type_counts.get(t['type'], 0) + 1
+
         logger.info("\nProcessing Summary:")
         logger.info(f"Input video: {input_path}")
-        logger.info(f"Cuts detected: {len(cuts)}")
         logger.info(f"Processing time: {processing_time:.2f}s")
-        
-        if cuts:
-            logger.info("\nCut timestamps:")
-            for i, cut in enumerate(cuts, 1):
-                logger.info(f"  {i}. {cut:.2f}s")
+        logger.info(f"Transitions detected: {len(transitions)}")
+        for ttype, count in sorted(type_counts.items()):
+            logger.info(f"  {ttype}: {count}")
         
         return 0
         
