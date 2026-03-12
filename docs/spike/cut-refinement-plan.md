@@ -137,6 +137,39 @@ Phase 4 — Extend
 
 Phase 1 items are independent and can be tackled in any order. Phase 2 depends on Phase 1 (config must be wired so the harness can test different parameter sets). Phase 3 and 4 each depend on the previous phase.
 
+---
+
+## Progress Log
+
+### Phase 1 — Complete
+
+All 4 items fixed. Additional work:
+- Added `score_mode: "max"` — takes strongest individual signal instead of weighted average. Catches cuts where quick+histogram are high but edge is low.
+- Added `--diagnose` CLI tool for per-frame score dumping on a time range.
+- YouTube downloader updated for SABR protocol (yt-dlp breaking change).
+
+**Baseline → Phase 1 results (97-min anime film):**
+- Cuts detected: 1,499 → 30 (sensitivity 0.5, weighted mode)
+- Processing time: 330s → 9s
+
+### Phase 2 — Complete
+
+Evaluation harness built (`tools/evaluate.py`). First annotation pass on test video (100 detections, sensitivity 0.7, max mode):
+
+| Metric | Value |
+|--------|-------|
+| Precision | 24.0% |
+| Recall | 100.0% |
+| F1 | 38.7% |
+
+**Key finding:** 100% recall (all real cuts found), but 76 false positives — mostly in explosion/high-motion sequences where sustained high scores mimic cuts.
+
+### Phase 3 — In Progress
+
+**Goal:** Adaptive thresholding to distinguish high-motion continuous shots from editorial cuts. The rolling baseline should rise during action sequences so only genuine scene changes break through.
+
+**Constraint:** Must NOT use min_cut_distance to suppress false positives — rapid-fire editorial cuts (e.g., Hitchcock's Psycho shower scene) are legitimate and must be preserved.
+
 ## Out of Scope
 
 - Multi-GPU / distributed processing
