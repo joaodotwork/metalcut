@@ -33,6 +33,9 @@ class DetectionConfig:
     weight_histogram: float = 0.4
     weight_edge: float = 0.2
 
+    # Score mode: "weighted" (classic weighted average) or "max" (best-of signals)
+    score_mode: str = "max"
+
     # Temporal scoring
     temporal_window: int = 5  # Number of recent scores to track
     temporal_boost_factor: float = 0.25  # Additive boost scaling
@@ -83,6 +86,7 @@ class DetectionConfig:
             "quick_threshold_range": "quick_threshold_range",
             "detailed_threshold_base": "detailed_threshold_base",
             "detailed_threshold_range": "detailed_threshold_range",
+            "score_mode": "score_mode",
         }
 
         for config_key, field_name in field_map.items():

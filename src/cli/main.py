@@ -29,6 +29,53 @@ def setup_logging(debug: bool = False):
         handlers=[RichHandler(rich_tracebacks=True)]
     )
 
+def diagnose_range(input_path: str, time_range: str, config: DetectionConfig):
+    """Dump per-frame scores for a time range to help debug missed cuts.
+
+    Args:
+        input_path: Path to video file.
+        time_range: Time range string, e.g. '16.47-21.10'.
+        config: Detection config.
+    """
+    start_str, end_str = time_range.split("-")
+    start_time, end_time = float(start_str), float(end_str)
+
+    accelerator = MetalAccelerator()
+    detector = CutDetector(config=config, use_gpu=accelerator.metal_available)
+
+    with VideoReader(input_path) as reader:
+        detector.set_video_params(reader.fps)
+
+        start_frame = int(start_time * reader.fps)
+        end_frame = int(end_time * reader.fps)
+
+        # Header
+        print(f"\n{'time':>8s}  {'frame':>6s}  {'quick':>6s}  {'hist':>6s}  {'edge':>6s}  {'final':>7s}  {'temporal':>8s}  {'cut':>3s}  threshold={config.detailed_threshold:.1f}")
+        print("-" * 80)
+
+        for frame in reader.read_frames():
+            frame_num = reader.frame_count
+            if frame_num < start_frame:
+                detector.detect_cut(frame)  # keep state updated
+                continue
+            if frame_num > end_frame:
+                break
+
+            is_cut, metrics = detector.detect_cut(frame)
+            t = frame_num / reader.fps
+
+            quick = metrics.get('quick_score', 0)
+            hist = metrics.get('histogram_score', 0)
+            edge = metrics.get('edge_score', 0)
+            final = metrics.get('final_score', 0)
+            temporal = metrics.get('temporal_score', 0)
+            marker = "<<<" if is_cut else ""
+
+            print(f"{t:8.3f}  {frame_num:6d}  {quick:6.1f}  {hist:6.1f}  {edge:6.1f}  {final:7.1f}  {temporal:8.3f}  {marker}")
+
+    print()
+
+
 def process_video(input_path: str,
                  output_dir: str,
                  config: Optional[DetectionConfig] = None,
@@ -171,6 +218,10 @@ def main():
                        help="Enable debug output")
     parser.add_argument("--output-json", action="store_true",
                        help="Save cuts data to JSON file")
+    parser.add_argument("--score-mode", choices=["weighted", "max"], default=None,
+                       help="Score mode: 'weighted' (default) or 'max' (best-of signals)")
+    parser.add_argument("--diagnose", type=str, default=None,
+                       help="Dump per-frame scores for a time range, e.g. '16.47-21.10'")
 
     args = parser.parse_args()
 
@@ -183,6 +234,7 @@ def main():
         raw_config,
         sensitivity=args.sensitivity,
         min_cut_distance=args.min_cut_distance,
+        score_mode=args.score_mode,
     )
 
     if args.debug:
@@ -195,7 +247,12 @@ def main():
         if not input_path.exists():
             logger.error(f"Input video not found: {input_path}")
             return 1
-        
+
+        # Diagnose mode — dump scores for a time range and exit
+        if args.diagnose:
+            diagnose_range(str(input_path), args.diagnose, detection_config)
+            return 0
+
         # Create output directory
         output_dir = Path(args.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)

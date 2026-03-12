@@ -152,11 +152,19 @@ class FrameMetrics:
                 'edge_score': edge_score
             })
 
-            combined_score = (
+            weighted_score = (
                 self.config.weight_quick * quick_score +
                 self.config.weight_histogram * hist_score +
                 self.config.weight_edge * edge_score
             )
+
+            if self.config.score_mode == "max":
+                # Don't let weak metrics drag down strong signals
+                combined_score = max(quick_score, hist_score, weighted_score)
+            else:
+                combined_score = weighted_score
+
+            metrics['weighted_score'] = weighted_score
         else:
             combined_score = quick_score
 
