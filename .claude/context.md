@@ -42,6 +42,9 @@ Deployment: development
 - **2026-03-12**: 7d631ae - Wire up --preview flag with real-time video playback
 - **2026-03-12**: eb21e1b - Add dissolve/fade detection with FP filtering (Phase 4)
 - **2026-03-12**: 12eed03 - Update spike plan with Phase 3 results
+- **2026-03-12**: 64c2664 - Add .DS_Store to .gitignore and remove tracked ones
+- **2026-03-12**: 7997057 - Initial commit: metalcut - GPU-accelerated video cut detection for Apple Silicon
+- **2026-03-12**: Initial Seiva context setup
 
 ## Cost-Effective Context Strategy
 **For AI assistants:**

@@ -29,8 +29,11 @@ class VideoDownloader:
         self.progress_lock = threading.Lock()
         
         # Base yt-dlp options
+        # Uses SABR protocol formats to work around YouTube's SABR streaming enforcement.
+        # See https://github.com/yt-dlp/yt-dlp/issues/12482
         self.base_opts = {
-            'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+            'format': 'bv[height<=720][protocol=sabr]+ba[protocol=sabr]/b',
+            'extractor_args': {'youtube': ['formats=duplicate']},
             'quiet': True,
             'no_warnings': True,
             'concurrent_fragment_downloads': 4,
