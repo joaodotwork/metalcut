@@ -16,7 +16,11 @@
         "quick_threshold_base": 15.0,
         "quick_threshold_range": 20.0,
         "detailed_threshold_base": 20.0,
-        "detailed_threshold_range": 30.0
+        "detailed_threshold_range": 30.0,
+        "score_mode": "max",
+        "lookahead_frames": 15,
+        "adaptive_percentile": 75.0,
+        "adaptive_margin": 12.0
     },
     "processing": {
         "batch_size": 32,

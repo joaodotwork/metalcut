@@ -30,7 +30,10 @@ def setup_logging(debug: bool = False):
     )
 
 def diagnose_range(input_path: str, time_range: str, config: DetectionConfig):
-    """Dump per-frame scores for a time range to help debug missed cuts.
+    """Dump per-frame scores for a time range using two-pass lookahead.
+
+    Scores the entire video first so that the adaptive threshold at each
+    frame reflects full lookahead context (frames before AND after).
 
     Args:
         input_path: Path to video file.
@@ -43,35 +46,48 @@ def diagnose_range(input_path: str, time_range: str, config: DetectionConfig):
     accelerator = MetalAccelerator()
     detector = CutDetector(config=config, use_gpu=accelerator.metal_available)
 
+    # Pass 1: Score all frames
     with VideoReader(input_path) as reader:
         detector.set_video_params(reader.fps)
+        total_frames = int(reader.duration * reader.fps)
 
-        start_frame = int(start_time * reader.fps)
-        end_frame = int(end_time * reader.fps)
+        with Progress(
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeRemainingColumn(),
+        ) as progress:
+            task = progress.add_task("Scoring frames...", total=total_frames)
+            for frame in reader.read_frames():
+                detector.score_frame(frame, frame_number=reader.frame_count)
+                progress.update(task, advance=1)
 
-        # Header
-        print(f"\n{'time':>8s}  {'frame':>6s}  {'quick':>6s}  {'hist':>6s}  {'edge':>6s}  {'final':>7s}  {'temporal':>8s}  {'cut':>3s}  threshold={config.detailed_threshold:.1f}")
-        print("-" * 80)
+    # Pass 2: Get diagnostics with lookahead thresholds
+    diagnostics = detector.get_diagnostics()
 
-        for frame in reader.read_frames():
-            frame_num = reader.frame_count
-            if frame_num < start_frame:
-                detector.detect_cut(frame)  # keep state updated
-                continue
-            if frame_num > end_frame:
-                break
+    print(f"\n{'time':>8s}  {'frame':>6s}  {'quick':>6s}  {'hist':>6s}  {'edge':>6s}  {'score':>7s}  {'nbhood':>7s}  {'thresh':>7s}  {'cut':>3s}")
+    print("-" * 80)
 
-            is_cut, metrics = detector.detect_cut(frame)
-            t = frame_num / reader.fps
+    for row in diagnostics:
+        if row['time'] < start_time:
+            continue
+        if row['time'] > end_time:
+            break
 
-            quick = metrics.get('quick_score', 0)
-            hist = metrics.get('histogram_score', 0)
-            edge = metrics.get('edge_score', 0)
-            final = metrics.get('final_score', 0)
-            temporal = metrics.get('temporal_score', 0)
-            marker = "<<<" if is_cut else ""
+        m = row['metrics']
+        quick = m.get('quick_score', 0)
+        hist = m.get('histogram_score', 0)
+        edge = m.get('edge_score', 0)
+        marker = "<<<" if row['is_cut'] else ""
 
-            print(f"{t:8.3f}  {frame_num:6d}  {quick:6.1f}  {hist:6.1f}  {edge:6.1f}  {final:7.1f}  {temporal:8.3f}  {marker}")
+        # Show neighborhood p75 for frames above base threshold
+        if row['score'] > config.detailed_threshold:
+            nbhood = row['threshold'] - config.adaptive_margin
+            nbhood_str = f"{nbhood:7.1f}"
+        else:
+            nbhood_str = "      -"
+
+        print(f"{row['time']:8.3f}  {row['frame']:6d}  {quick:6.1f}  {hist:6.1f}  {edge:6.1f}  {row['score']:7.1f}  {nbhood_str}  {row['threshold']:7.1f}  {marker}")
 
     print()
 
@@ -84,7 +100,12 @@ def process_video(input_path: str,
                  preview: bool = False,
                  create_clips: bool = False,
                  debug: bool = False) -> List[float]:
-    """Process video and detect cuts."""
+    """Process video with two-pass detection.
+
+    Pass 1: Score every frame (fast — GPU-accelerated).
+    Pass 2: Determine cuts with lookahead context.
+    Pass 3 (optional): Re-read video to create clips at known cut points.
+    """
     # Initialize components
     accelerator = MetalAccelerator()
     if config is None:
@@ -93,88 +114,76 @@ def process_video(input_path: str,
         config=config,
         use_gpu=accelerator.metal_available
     )
-    
-    cuts = []
-    frames_since_cut = 0
-    current_clip_frames = []
-    
-    try:
-        # Initialize video reader
+
+    # Pass 1: Score all frames
+    with VideoReader(input_path) as reader:
+        detector.set_video_params(reader.fps)
+        total_frames = int(reader.duration * reader.fps)
+        fps = reader.fps
+        duration = reader.duration
+
+        with Progress(
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeRemainingColumn(),
+        ) as progress:
+            task = progress.add_task("Scoring frames...", total=total_frames)
+            for frame in reader.read_frames():
+                detector.score_frame(frame, frame_number=reader.frame_count)
+                progress.update(task, advance=1)
+
+    # Pass 2: Detect cuts with lookahead
+    cut_results = detector.detect_cuts()
+    cuts = [timestamp for _, timestamp in cut_results]
+
+    for i, (frame_num, cut_time) in enumerate(cut_results, 1):
+        logger.info(f"Cut detected at {cut_time:.2f}s")
+
+    # Pass 3 (optional): Create clips at known cut points
+    if create_clips:
+        cut_frame_set = set(frame_num for frame_num, _ in cut_results)
+
         with VideoReader(input_path) as reader:
-            detector.set_video_params(reader.fps)
-            
-            # Initialize clip writer if needed
-            writer = None
-            if create_clips:
-                writer = ClipWriter(
-                    output_dir,
-                    fps=reader.fps,
-                    parallel=True
-                )
-            
-            # Setup progress bar
-            total_frames = int(reader.duration * reader.fps)
+            writer = ClipWriter(output_dir, fps=fps, parallel=True)
+            current_clip_frames = []
+            clip_start_time = 0.0
+
             with Progress(
                 TextColumn("[progress.description]{task.description}"),
                 BarColumn(),
                 TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
                 TimeRemainingColumn(),
             ) as progress:
-                task = progress.add_task("Processing video...", total=total_frames)
-                
-                # Process frames
+                task = progress.add_task("Creating clips...", total=total_frames)
+
                 for frame in reader.read_frames():
-                    # Detect cut
-                    is_cut, metrics = detector.detect_cut(frame)
-                    
-                    if debug and metrics:
-                        logger.debug(f"Frame {reader.frame_count}: {metrics}")
-                    
-                    # Handle cut detection
-                    if is_cut:
-                        cut_time = reader.frame_count / reader.fps
-                        cuts.append(cut_time)
-                        logger.info(f"Cut detected at {cut_time:.2f}s")
-                        
-                        # Create clip if needed
-                        if create_clips and current_clip_frames:
-                            clip_start = (reader.frame_count - len(current_clip_frames)) / reader.fps
+                    frame_num = reader.frame_count
+                    current_clip_frames.append(frame.copy())
+
+                    if frame_num in cut_frame_set:
+                        cut_time = frame_num / fps
+                        if current_clip_frames:
                             writer.create_clip_from_frames(
                                 current_clip_frames,
-                                clip_start,
+                                clip_start_time,
                                 cut_time,
-                                reader.fps
+                                fps
                             )
-                            current_clip_frames = []
-                    
-                    # Store frame for clip creation
-                    if create_clips:
-                        current_clip_frames.append(frame.copy())
-                    
-                    # Show preview if enabled
-                    if preview:
-                        preview_frame = create_preview(frame, metrics)
-                        cv2.imshow('Preview', preview_frame)
-                        if cv2.waitKey(1) & 0xFF == ord('q'):
-                            break
-                    
-                    # Update progress
+                        clip_start_time = cut_time
+                        current_clip_frames = []
+
                     progress.update(task, advance=1)
-                
+
                 # Handle last clip
-                if create_clips and current_clip_frames:
-                    clip_start = (reader.frame_count - len(current_clip_frames)) / reader.fps
+                if current_clip_frames:
                     writer.create_clip_from_frames(
                         current_clip_frames,
-                        clip_start,
-                        reader.duration,
-                        reader.fps
+                        clip_start_time,
+                        duration,
+                        fps
                     )
-    
-    finally:
-        if preview:
-            cv2.destroyAllWindows()
-    
+
     return cuts
 
 def load_config(config_path: Optional[str] = None) -> dict:

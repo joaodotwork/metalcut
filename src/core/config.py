@@ -40,6 +40,12 @@ class DetectionConfig:
     temporal_window: int = 5  # Number of recent scores to track
     temporal_boost_factor: float = 0.25  # Additive boost scaling
 
+    # Lookahead adaptive thresholding — scores all frames first, then decides
+    # with symmetrical context (N frames before AND after each candidate)
+    lookahead_frames: int = 15  # Frames to look ahead/behind for neighborhood context
+    adaptive_percentile: float = 75.0  # Percentile of neighborhood scores
+    adaptive_margin: float = 12.0  # Score must exceed neighborhood_percentile + margin to be a cut
+
     # Threshold ranges derived from sensitivity:
     #   quick_threshold = quick_base + (1 - sensitivity) * quick_range
     #   detailed_threshold = detailed_base + (1 - sensitivity) * detailed_range
@@ -87,6 +93,9 @@ class DetectionConfig:
             "detailed_threshold_base": "detailed_threshold_base",
             "detailed_threshold_range": "detailed_threshold_range",
             "score_mode": "score_mode",
+            "lookahead_frames": "lookahead_frames",
+            "adaptive_percentile": "adaptive_percentile",
+            "adaptive_margin": "adaptive_margin",
         }
 
         for config_key, field_name in field_map.items():
