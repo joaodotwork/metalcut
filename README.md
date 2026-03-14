@@ -65,18 +65,24 @@ flowchart TD
         Reader1[VideoReader] --> Accel{MetalAccelerator}
         Accel --> |"cv2.UMat (GPU)"| Score[FrameMetrics]
         Accel --> |"ndarray (CPU)"| Score
-        Score --> Quick["Quick Difference\n64x36 downscale"]
-        Quick --> |"> gate"| Detailed["Histogram +\nEdge Analysis"]
+        Score --> Quick["Quick Difference
+        64x36 downscale"]
+        Quick --> |"> gate"| Detailed["Histogram +
+        Edge Analysis"]
         Quick --> |"< gate"| Store
-        Detailed --> Store["Store scores\n+ luminance"]
+        Detailed --> Store["Store scores
+        + luminance"]
     end
 
     Store --> Pass2
 
     subgraph Pass2 ["Pass 2: Detect"]
-        Adaptive["Adaptive Threshold\nIQR-damped lookahead"] --> HardCuts[Hard Cuts]
-        Dissolves["Dissolve Detector\nmid-range score runs"] --> DissolveOut[Dissolves]
-        Fades["Fade Detector\nluminance trends"] --> FadeOut[Fades]
+        Adaptive["Adaptive Threshold
+        IQR-damped lookahead"] --> HardCuts[Hard Cuts]
+        Dissolves["Dissolve Detector
+        mid-range score runs"] --> DissolveOut[Dissolves]
+        Fades["Fade Detector
+        luminance trends"] --> FadeOut[Fades]
     end
 
     HardCuts --> Output

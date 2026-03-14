@@ -37,11 +37,11 @@ Deployment: development
 3. Deploy to staging
 
 ## Recent Activity
+- **2026-03-14**: 4df3cc6 - Fix mermaid diagram line breaks in two-pass architecture
 - **2026-03-14**: a60bbe8 - Add preview screenshot and badges to README
 - **2026-03-12**: 8da698e - Update local context tracking
 - **2026-03-12**: 99265aa - Update README with two-pass architecture and full CLI reference
 - **2026-03-12**: 7d631ae - Wire up --preview flag with real-time video playback
-- **2026-03-12**: eb21e1b - Add dissolve/fade detection with FP filtering (Phase 4)
 
 ## Cost-Effective Context Strategy
 **For AI assistants:**
