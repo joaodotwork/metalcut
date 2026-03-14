@@ -1,6 +1,13 @@
 # metalcut
 
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Platform](https://img.shields.io/badge/platform-macOS%20Apple%20Silicon-lightgrey.svg)]()
+[![OpenCV](https://img.shields.io/badge/OpenCV-Metal%2FOpenCL-green.svg)](https://opencv.org/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 GPU-accelerated video cut detection for Apple Silicon. Detects hard cuts, dissolves, and fades using a two-pass scoring pipeline with adaptive thresholding.
+
+![metalcut preview — cut detection on Psycho (1960)](assets/preview-cut-detection.png)
 
 ## Installation
 

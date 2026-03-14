@@ -1,5 +1,5 @@
 # Project Context Snapshot
-**Last Updated:** 2026-03-12
+**Last Updated:** 2026-03-14
 **Project:** metalcut
 
 ## Current State
@@ -37,14 +37,11 @@ Deployment: development
 3. Deploy to staging
 
 ## Recent Activity
+- **2026-03-14**: a60bbe8 - Add preview screenshot and badges to README
 - **2026-03-12**: 8da698e - Update local context tracking
 - **2026-03-12**: 99265aa - Update README with two-pass architecture and full CLI reference
 - **2026-03-12**: 7d631ae - Wire up --preview flag with real-time video playback
 - **2026-03-12**: eb21e1b - Add dissolve/fade detection with FP filtering (Phase 4)
-- **2026-03-12**: 12eed03 - Update spike plan with Phase 3 results
-- **2026-03-12**: 64c2664 - Add .DS_Store to .gitignore and remove tracked ones
-- **2026-03-12**: 7997057 - Initial commit: metalcut - GPU-accelerated video cut detection for Apple Silicon
-- **2026-03-12**: Initial Seiva context setup
 
 ## Cost-Effective Context Strategy
 **For AI assistants:**
