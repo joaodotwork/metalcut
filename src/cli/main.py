@@ -66,8 +66,13 @@ def diagnose_range(input_path: str, time_range: str, config: DetectionConfig):
     # Pass 2: Get diagnostics with lookahead thresholds
     diagnostics = detector.get_diagnostics()
 
-    print(f"\n{'time':>8s}  {'frame':>6s}  {'quick':>6s}  {'hist':>6s}  {'edge':>6s}  {'score':>7s}  {'nbhood':>7s}  {'thresh':>7s}  {'cut':>3s}")
-    print("-" * 80)
+    sem_header = "  {'phash':>6s}  {'palDst':>6s}" if config.use_semantic else ""
+    header = f"\n{'time':>8s}  {'frame':>6s}  {'quick':>6s}  {'hist':>6s}  {'edge':>6s}  {'score':>7s}  {'nbhood':>7s}  {'thresh':>7s}"
+    if config.use_semantic:
+        header += f"  {'phash':>6s}  {'palDst':>6s}"
+    header += f"  {'cut':>3s}"
+    print(header)
+    print("-" * (90 if config.use_semantic else 80))
 
     for row in diagnostics:
         if row['time'] < start_time:
@@ -88,7 +93,13 @@ def diagnose_range(input_path: str, time_range: str, config: DetectionConfig):
         else:
             nbhood_str = "      -"
 
-        print(f"{row['time']:8.3f}  {row['frame']:6d}  {quick:6.1f}  {hist:6.1f}  {edge:6.1f}  {row['score']:7.1f}  {nbhood_str}  {row['threshold']:7.1f}  {marker}")
+        line = f"{row['time']:8.3f}  {row['frame']:6d}  {quick:6.1f}  {hist:6.1f}  {edge:6.1f}  {row['score']:7.1f}  {nbhood_str}  {row['threshold']:7.1f}"
+        if config.use_semantic:
+            phash_d = row.get('phash_dist', 0)
+            palette_d = row.get('palette_dist', 0.0)
+            line += f"  {phash_d:6d}  {palette_d:6.3f}"
+        line += f"  {marker}"
+        print(line)
 
     print()
 
@@ -330,6 +341,8 @@ def main():
                        help="Score mode: 'weighted' (default) or 'max' (best-of signals)")
     parser.add_argument("--diagnose", type=str, default=None,
                        help="Dump per-frame scores for a time range, e.g. '16.47-21.10'")
+    parser.add_argument("--semantic", action="store_true",
+                       help="Enable semantic scene analysis (pHash + color palette) for FP reduction")
 
     args = parser.parse_args()
 
@@ -343,6 +356,7 @@ def main():
         sensitivity=args.sensitivity,
         min_cut_distance=args.min_cut_distance,
         score_mode=args.score_mode,
+        use_semantic=args.semantic if args.semantic else None,
     )
 
     if args.debug:

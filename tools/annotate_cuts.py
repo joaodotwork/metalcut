@@ -13,11 +13,13 @@ class CutAnnotator:
         self.video_id = Path(video_path).stem
         self.fps = self.video.get(cv2.CAP_PROP_FPS)
         self.cuts = self.load_cuts(cuts_file)
+        self.total_frames = int(self.video.get(cv2.CAP_PROP_FRAME_COUNT))
         self.feedback = {
             'video_id': self.video_id,
             'timestamp': datetime.now().isoformat(),
             'good_cuts': [],  # Can now contain timestamps or ranges
-            'false_positives': []
+            'false_positives': [],
+            'missed_cuts': []  # Cuts found during browse that the detector missed
         }
         self.window_name = 'Cut Review'
         cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
@@ -177,6 +179,103 @@ class CutAnnotator:
                 
         cv2.destroyWindow('Context View (Press Q to return)')
 
+    def browse_for_missed(self):
+        """Browse the video freely to mark missed cuts.
+
+        Controls:
+            Left/Right arrow or A/D: step 1 frame
+            Shift behavior via J/L: jump 1 second
+            Comma/Period: jump 10 seconds
+            M: mark current position as a missed cut
+            Space: play/pause
+            ESC: done
+        """
+        frame_num = 0
+        playing = False
+        marked_frames = set()
+
+        while True:
+            self.video.set(cv2.CAP_PROP_POS_FRAMES, frame_num)
+            ret, frame = self.video.read()
+            if not ret:
+                frame_num = max(0, frame_num - 1)
+                continue
+
+            display = frame.copy()
+            h, w = display.shape[:2]
+            current_time = frame_num / self.fps
+
+            # Top bar with time/frame info
+            overlay = display.copy()
+            cv2.rectangle(overlay, (0, 0), (w, 50), (0, 0, 0), -1)
+            cv2.rectangle(overlay, (0, h - 70), (w, h), (0, 0, 0), -1)
+            display = cv2.addWeighted(overlay, 0.7, display, 0.3, 0)
+
+            cv2.putText(display, f"{current_time:.2f}s  frame {frame_num}",
+                        (10, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+
+            # Show marked count
+            marked_text = f"Missed cuts marked: {len(self.feedback['missed_cuts'])}"
+            cv2.putText(display, marked_text,
+                        (w - 400, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+
+            # Highlight if this frame is marked
+            if frame_num in marked_frames:
+                cv2.putText(display, "MARKED", (w // 2 - 60, h // 2),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
+
+            # Timeline bar
+            progress = frame_num / max(1, self.total_frames)
+            bar_x = int(20 + (w - 40) * progress)
+            cv2.rectangle(display, (20, h - 55), (w - 20, h - 50), (128, 128, 128), -1)
+            cv2.circle(display, (bar_x, h - 52), 6, (0, 255, 0), -1)
+
+            # Draw marks on timeline
+            for mf in marked_frames:
+                mx = int(20 + (w - 40) * (mf / max(1, self.total_frames)))
+                cv2.line(display, (mx, h - 60), (mx, h - 45), (0, 255, 255), 2)
+
+            # Instructions
+            cv2.putText(display, "A/D: frame | J/L: 1s | ,/.: 10s | M: mark cut | Space: play | ESC: done",
+                        (10, h - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+
+            cv2.imshow(self.window_name, display)
+
+            wait_time = int(1000 / self.fps) if playing else 1
+            key = cv2.waitKey(wait_time) & 0xFF
+
+            if key == 27:  # ESC
+                break
+            elif key == ord('m'):
+                if frame_num not in marked_frames:
+                    marked_frames.add(frame_num)
+                    self.feedback['missed_cuts'].append(round(current_time, 3))
+                    self.feedback['good_cuts'].append(round(current_time, 3))
+            elif key == ord(' '):
+                playing = not playing
+            elif key in [2, ord('a')]:  # Left / A
+                playing = False
+                frame_num = max(0, frame_num - 1)
+            elif key in [3, ord('d')]:  # Right / D
+                playing = False
+                frame_num = min(self.total_frames - 1, frame_num + 1)
+            elif key == ord('j'):  # Back 1s
+                playing = False
+                frame_num = max(0, frame_num - int(self.fps))
+            elif key == ord('l'):  # Forward 1s
+                playing = False
+                frame_num = min(self.total_frames - 1, frame_num + int(self.fps))
+            elif key == ord(','):  # Back 10s
+                playing = False
+                frame_num = max(0, frame_num - int(self.fps * 10))
+            elif key == ord('.'):  # Forward 10s
+                playing = False
+                frame_num = min(self.total_frames - 1, frame_num + int(self.fps * 10))
+            elif playing:
+                frame_num = min(self.total_frames - 1, frame_num + 1)
+                if frame_num >= self.total_frames - 1:
+                    playing = False
+
     def save_feedback(self, output_file: str):
         """Save annotation feedback."""
         with open(output_file, 'w') as f:
@@ -238,15 +337,23 @@ def main():
                 
             reviewed += 1
 
+        # Browse mode for missed cuts
+        print("[cyan]Entering browse mode — scrub through the video to mark missed cuts.[/cyan]")
+        print("[cyan]Press ESC when done.[/cyan]")
+        cv2.setWindowTitle(annotator.window_name, 'Browse — mark missed cuts (M to mark, ESC to finish)')
+        annotator.browse_for_missed()
+
         # Save results
         annotator.save_feedback(output_file)
-        
+
         # Show final statistics in a window
+        missed = len(annotator.feedback['missed_cuts'])
         stats_text = [
             f"Annotation Complete",
-            f"Reviewed: {reviewed}/{total_cuts} cuts",
-            f"Correct cuts: {len(annotator.feedback['good_cuts'])}",
+            f"Reviewed: {reviewed}/{total_cuts} detected cuts",
+            f"Correct cuts: {len(annotator.feedback['good_cuts']) - missed}",
             f"Incorrect cuts: {len(annotator.feedback['false_positives'])}",
+            f"Missed cuts marked: {missed}",
             f"",
             f"Results saved to: {output_file.name}",
             f"",

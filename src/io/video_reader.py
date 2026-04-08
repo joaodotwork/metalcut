@@ -101,16 +101,9 @@ class VideoReader:
                     yield self.buffer.popleft()
                     frames_read += 1
                 
-                # Reset counters and check performance
+                # Reset batch counter
                 if frames_read >= batch_size:
-                    batch_time = time.time() - batch_start_time
-                    fps = batch_size / batch_time if batch_time > 0 else 0
-                    
-                    if fps < self._fps * 0.8:  # Performance warning
-                        logger.warning(f"Frame reading running slower than video FPS: {fps:.2f} fps")
-                    
                     frames_read = 0
-                    batch_start_time = time.time()
                 
                 # Check if we've reached the end
                 if not self.buffer and self._cap.get(cv2.CAP_PROP_POS_FRAMES) >= self._cap.get(cv2.CAP_PROP_FRAME_COUNT):
