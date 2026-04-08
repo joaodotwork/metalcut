@@ -35,6 +35,9 @@ python -m src.cli.main --input video.mp4 --sensitivity 0.7 --score-mode max --di
 # Create clips at cut points
 python -m src.cli.main --input video.mp4 --sensitivity 0.7 --score-mode max --create-clips
 
+# Enable the optional Tier 1 semantic scene gate (pHash + color palette FP filter)
+python -m src.cli.main --input video.mp4 --sensitivity 0.7 --semantic
+
 # Use a custom config file
 python -m src.cli.main --input video.mp4 --config my_config.json
 ```
@@ -50,6 +53,7 @@ python -m src.cli.main --input video.mp4 --config my_config.json
 | `--preview`, `-p` | Replay video with score overlay and transition labels |
 | `--diagnose` | Dump per-frame scores for a time range (e.g. `"16.47-21.10"`) |
 | `--create-clips`, `-c` | Split video into clips at cut points |
+| `--semantic` | Enable the Tier 1 semantic scene gate (pHash + HSV palette) for FP reduction |
 | `--config` | Path to config JSON (default: `config/default_config.json`) |
 | `--min-cut-distance`, `-d` | Minimum seconds between cuts |
 | `--output-dir`, `-o` | Output directory (default: `output`) |
@@ -78,7 +82,10 @@ flowchart TD
 
     subgraph Pass2 ["Pass 2: Detect"]
         Adaptive["Adaptive Threshold
-        IQR-damped lookahead"] --> HardCuts[Hard Cuts]
+        IQR-damped lookahead"] --> Semantic{"Semantic gate
+        (optional)"}
+        Semantic --> |"pHash + palette
+        confirm scene change"| HardCuts[Hard Cuts]
         Dissolves["Dissolve Detector
         mid-range score runs"] --> DissolveOut[Dissolves]
         Fades["Fade Detector
@@ -101,7 +108,7 @@ flowchart TD
 
 **Pass 2 (Detect):** With all scores available, three detectors run:
 
-- **Hard cuts** use adaptive thresholding with symmetrical lookahead (±15 frames). An IQR-based damping mechanism reduces the adaptive margin when the neighborhood has high score spread (bimodal: spikes + zeros), preserving rapid-fire editorial cuts while suppressing sustained action sequences.
+- **Hard cuts** use adaptive thresholding with symmetrical lookahead (±15 frames). An IQR-based damping mechanism reduces the adaptive margin when the neighborhood has high score spread (bimodal: spikes + zeros), preserving rapid-fire editorial cuts while suppressing sustained action sequences. With `--semantic`, candidates also pass through a Tier 1 scene gate (pHash hamming + HSV palette distance) that rejects matches only when the predecessor frame is perceptually nearly identical — see [the spike doc](docs/spike/semantic-scene-spike.md) for the negative-result evaluation.
 - **Dissolves** find sustained runs of mid-range scores, filtered by proximity to hard cuts and bell-curve shape requirements.
 - **Fades** track mean luminance to find fade-to-black and fade-from-black transitions.
 
@@ -148,6 +155,11 @@ All parameters are tunable via `config/default_config.json` with CLI overrides t
 | `adaptive_margin` | 12.0 | Score must exceed neighborhood p75 + margin |
 | `dissolve_min_frames` | 8 | Minimum frames for a dissolve detection |
 | `fade_min_frames` | 15 | Minimum frames for a fade detection |
+| `use_semantic` | `false` | Enable Tier 1 semantic scene gate (pHash + palette) |
+| `phash_size` | 8 | Perceptual hash grid (8 → 64-bit hash) |
+| `phash_hamming_threshold` | 12 | Min pHash hamming distance to confirm a cut (when `use_semantic`) |
+| `palette_bins` | 8 | HSV histogram bins per channel for palette descriptor |
+| `palette_change_threshold` | 0.3 | Min palette L2 distance to confirm a cut (when `use_semantic`) |
 
 ## Tools
 

@@ -189,6 +189,8 @@ Evaluation harness built (`tools/evaluate.py`). First annotation pass on test vi
 
 **Remaining FP sources (34 FPs):** Mostly isolated single-frame spikes where explosion/action frame changes score identically to real scene changes. Frame-difference metrics alone cannot distinguish these — would require semantic understanding of scene content (see #2).
 
+> **Update (2026-04-08):** #2 was spiked as Tier 1 — pHash + HSV color palette gate, merged in #6. Result was a documented **negative**: on the two annotated test videos available at the time, the gate filtered zero cuts (detection sets byte-identical with and without `--semantic`). The FP pattern this spike anticipated does not appear on either video — possibly because Phase 3's lookahead+IQR damping already removed those candidates upstream. Infrastructure ships as opt-in scaffolding for future revalidation; see [`semantic-scene-spike.md`](./semantic-scene-spike.md) for the full evaluation and the two unrelated recall problems that surfaced (burst-cut ceiling and subtle-cut floor).
+
 ### Phase 4 — Complete
 
 **Goal:** Detect dissolves (cross-fades between shots) and fades (to/from black).
