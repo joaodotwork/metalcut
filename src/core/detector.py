@@ -46,6 +46,7 @@ class CutDetector:
         self.all_luminance = []
         self.frame_numbers = []  # external frame numbers for timestamp calculation
 
+
     def score_frame(self, frame: Union[np.ndarray, cv2.UMat],
                     frame_number: Optional[int] = None) -> Tuple[float, Dict[str, float]]:
         """Score a single frame against its predecessor.
@@ -81,10 +82,11 @@ class CutDetector:
             self.frame_numbers.append(fn)
             return 0.0, {'first_frame': True}
 
-        # Score the frame pair
+        # Score the frame pair (semantic features computed inside when gate fires)
         score, metrics = self.metrics.combined_difference(
             self.previous_frame, frame
         )
+
         self.all_scores.append(score)
         self.all_metrics.append(metrics)
         self.frame_numbers.append(fn)
@@ -158,6 +160,23 @@ class CutDetector:
             effective_threshold = self._neighborhood_threshold(i)
 
             if score > effective_threshold:
+                # Semantic gate: reject if scene context hasn't changed.
+                # Semantic features are computed per-pair inside combined_difference
+                # (piggybacking on the existing GPU→CPU transfer), so they live
+                # in all_metrics[i] rather than separate arrays.
+                m = self.all_metrics[i]
+                if (self.config.use_semantic
+                        and 'phash_1' in m and 'phash_2' in m):
+                    hash_dist = FrameMetrics.hamming_distance(
+                        m['phash_1'], m['phash_2']
+                    )
+                    palette_dist = float(np.linalg.norm(
+                        m['palette_2'] - m['palette_1']
+                    ))
+                    if (palette_dist < self.config.palette_change_threshold
+                            and hash_dist < self.config.phash_hamming_threshold):
+                        continue  # within-scene motion, not a cut
+
                 timestamp = self.frame_numbers[i] / self.fps
                 cuts.append((i, timestamp))
                 last_cut_frame = i
@@ -360,7 +379,7 @@ class CutDetector:
         for i, (score, metrics, fn) in enumerate(zip(self.all_scores, self.all_metrics, self.frame_numbers)):
             thresh = self._neighborhood_threshold(i) if score > base_threshold else base_threshold
             lum = self.all_luminance[i] if i < len(self.all_luminance) else 0.0
-            rows.append({
+            row = {
                 'frame': fn,
                 'time': fn / self.fps,
                 'score': score,
@@ -368,7 +387,15 @@ class CutDetector:
                 'threshold': thresh,
                 'luminance': lum,
                 'is_cut': i in cut_frames,
-            })
+            }
+            if self.config.use_semantic and 'phash_1' in metrics and 'phash_2' in metrics:
+                row['phash_dist'] = FrameMetrics.hamming_distance(
+                    metrics['phash_1'], metrics['phash_2']
+                )
+                row['palette_dist'] = float(np.linalg.norm(
+                    metrics['palette_2'] - metrics['palette_1']
+                ))
+            rows.append(row)
 
         return rows
 

@@ -125,6 +125,57 @@ class FrameMetrics:
             print(f"Error in edge_difference: {e}")
             return 0.0
 
+    def color_palette(self, frame: np.ndarray) -> np.ndarray:
+        """Extract a compact color palette descriptor from HSV histogram.
+
+        Returns a normalized 1D vector (palette_bins * 2 elements) capturing
+        the hue and saturation distribution. Fast alternative to k-means
+        dominant color extraction.
+        """
+        try:
+            hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+            bins = self.config.palette_bins
+            h_hist = cv2.calcHist([hsv], [0], None, [bins], [0, 180])
+            s_hist = cv2.calcHist([hsv], [1], None, [bins], [0, 256])
+            descriptor = np.concatenate([h_hist, s_hist]).flatten()
+            cv2.normalize(descriptor, descriptor)
+            return descriptor
+        except Exception as e:
+            logger = logging.getLogger(__name__)
+            logger.debug(f"Error in color_palette: {e}")
+            return np.zeros(self.config.palette_bins * 2, dtype=np.float32)
+
+    def phash(self, frame: np.ndarray) -> int:
+        """Compute perceptual hash via DCT.
+
+        Resizes to (hash_size*4)^2, applies DCT, keeps low-frequency
+        hash_size^2 coefficients, thresholds at median → 64-bit hash.
+        Hamming distance between hashes measures perceptual similarity.
+        """
+        try:
+            hash_size = self.config.phash_size
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            resized = cv2.resize(gray, (hash_size * 4, hash_size * 4),
+                                 interpolation=cv2.INTER_AREA)
+            dct = cv2.dct(np.float32(resized))
+            dct_low = dct[:hash_size, :hash_size]
+            median = np.median(dct_low)
+            bits = (dct_low > median).flatten()
+            # Pack bits into integer (up to 64 bits for hash_size=8)
+            hash_val = 0
+            for bit in bits:
+                hash_val = (hash_val << 1) | int(bit)
+            return hash_val
+        except Exception as e:
+            logger = logging.getLogger(__name__)
+            logger.debug(f"Error in phash: {e}")
+            return 0
+
+    @staticmethod
+    def hamming_distance(h1: int, h2: int) -> int:
+        """Count differing bits between two hashes."""
+        return bin(h1 ^ h2).count('1')
+
     def combined_difference(self, frame1: Union[np.ndarray, cv2.UMat],
                            frame2: Union[np.ndarray, cv2.UMat]) -> Tuple[float, dict]:
         """Calculate combined difference score using multiple metrics.
@@ -165,6 +216,13 @@ class FrameMetrics:
                 combined_score = weighted_score
 
             metrics['weighted_score'] = weighted_score
+
+            # Piggyback semantic features on the CPU frames we already have
+            if self.config.use_semantic:
+                metrics['phash_1'] = self.phash(f1)
+                metrics['phash_2'] = self.phash(f2)
+                metrics['palette_1'] = self.color_palette(f1)
+                metrics['palette_2'] = self.color_palette(f2)
         else:
             combined_score = quick_score
 

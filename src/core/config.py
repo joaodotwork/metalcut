@@ -55,6 +55,13 @@ class DetectionConfig:
     fade_min_frames: int = 15  # Minimum frames for a fade transition (~0.5s at 24fps)
     fade_luminance_drop: float = 30.0  # Luminance must change by at least this much
 
+    # Semantic scene analysis (Tier 1) — optional FP reduction via pHash + color palette
+    use_semantic: bool = False
+    phash_size: int = 8  # Hash grid size (8 → 64-bit hash)
+    palette_bins: int = 8  # Bins per HSV channel for palette descriptor
+    palette_change_threshold: float = 0.3  # Min palette distance to confirm a cut
+    phash_hamming_threshold: int = 12  # Min hamming distance to confirm a cut
+
     # Threshold ranges derived from sensitivity:
     #   quick_threshold = quick_base + (1 - sensitivity) * quick_range
     #   detailed_threshold = detailed_base + (1 - sensitivity) * detailed_range
@@ -110,6 +117,11 @@ class DetectionConfig:
             "fade_luminance_threshold": "fade_luminance_threshold",
             "fade_min_frames": "fade_min_frames",
             "fade_luminance_drop": "fade_luminance_drop",
+            "use_semantic": "use_semantic",
+            "phash_size": "phash_size",
+            "palette_bins": "palette_bins",
+            "palette_change_threshold": "palette_change_threshold",
+            "phash_hamming_threshold": "phash_hamming_threshold",
         }
 
         for config_key, field_name in field_map.items():
