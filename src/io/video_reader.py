@@ -82,31 +82,38 @@ class VideoReader:
         
         frames_read = 0
         batch_start_time = time.time()
-        
+        eof = False
+
         try:
             while True:
                 # Fill buffer if needed
                 while len(self.buffer) < self.buffer_size:
                     ret, frame = self._cap.read()
                     if not ret:
+                        # Authoritative EOF signal — don't trust
+                        # CAP_PROP_POS_FRAMES vs CAP_PROP_FRAME_COUNT, which
+                        # is unreliable for some codecs (e.g. mpeg4 ASP) and
+                        # can leave this loop spinning forever after the last
+                        # frame is read.
+                        eof = True
                         break
-                    
+
                     if frame is not None:
                         frame = self._resize_frame(frame)
                         self.buffer.append(frame)
                         self._frame_count += 1
-                
+
                 # Yield frames from buffer
                 while self.buffer and frames_read < batch_size:
                     yield self.buffer.popleft()
                     frames_read += 1
-                
+
                 # Reset batch counter
                 if frames_read >= batch_size:
                     frames_read = 0
-                
-                # Check if we've reached the end
-                if not self.buffer and self._cap.get(cv2.CAP_PROP_POS_FRAMES) >= self._cap.get(cv2.CAP_PROP_FRAME_COUNT):
+
+                # End once the cap is exhausted and the buffer is drained
+                if eof and not self.buffer:
                     break
         
         except Exception as e:
