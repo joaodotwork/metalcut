@@ -269,8 +269,10 @@ def process_video(input_path: str,
 
                 for frame in reader.read_frames():
                     frame_num = reader.frame_count
-                    current_clip_frames.append(frame.copy())
 
+                    # Flush the previous clip BEFORE appending the cut frame,
+                    # so the cut frame (first frame of the new shot) becomes
+                    # the start of the next clip instead of trailing the old one.
                     if frame_num in cut_frame_set:
                         cut_time = frame_num / fps
                         if current_clip_frames:
@@ -282,6 +284,8 @@ def process_video(input_path: str,
                             )
                         clip_start_time = cut_time
                         current_clip_frames = []
+
+                    current_clip_frames.append(frame.copy())
 
                     progress.update(task, advance=1)
 
