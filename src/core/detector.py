@@ -129,7 +129,7 @@ class CutDetector:
             spread = 0.0
         damping = max(0.0, 1.0 - spread)
 
-        adaptive = p75 + self.config.adaptive_margin * damping
+        adaptive = p75 + self.config.effective_adaptive_margin * damping
         return max(self.detailed_threshold, adaptive)
 
     def detect_cuts(self) -> List[Tuple[int, float]]:

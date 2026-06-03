@@ -70,13 +70,45 @@ class DetectionConfig:
     detailed_threshold_base: float = 20.0
     detailed_threshold_range: float = 30.0
 
+    # High-sensitivity relief — above the knee, both the detailed-threshold
+    # floor and the adaptive neighborhood margin ramp down toward these minima,
+    # so low-contrast hard cuts (visually similar adjacent shots, score < 20)
+    # become catchable. At or below the knee, behavior is identical to the plain
+    # linear sensitivity scale above, so default/medium-sensitivity runs are
+    # unchanged. See docs/spike/cut-refinement-plan.md.
+    high_sensitivity_knee: float = 0.7
+    detailed_threshold_min: float = 8.0
+    adaptive_margin_min: float = 8.0
+
+    def _knee_ramp(self, value_at_knee: float, minimum: float) -> float:
+        """Interpolate value_at_knee → minimum as sensitivity rises knee → 1.0.
+
+        Returns value_at_knee unchanged at or below the knee, so the relief is
+        a no-op for default/medium sensitivity.
+        """
+        s, knee = self.sensitivity, self.high_sensitivity_knee
+        if s <= knee or knee >= 1.0:
+            return value_at_knee
+        t = (s - knee) / (1.0 - knee)
+        return value_at_knee + t * (minimum - value_at_knee)
+
     @property
     def quick_threshold(self) -> float:
         return self.quick_threshold_base + (1.0 - self.sensitivity) * self.quick_threshold_range
 
     @property
     def detailed_threshold(self) -> float:
-        return self.detailed_threshold_base + (1.0 - self.sensitivity) * self.detailed_threshold_range
+        # Linear scale clamped at the knee, then ramped toward the floor minimum
+        # above it. min(sensitivity, knee) makes this equal the plain linear value
+        # at/below the knee and the linear value *at* the knee once above it.
+        s_clamped = min(self.sensitivity, self.high_sensitivity_knee)
+        value_at_knee = self.detailed_threshold_base + (1.0 - s_clamped) * self.detailed_threshold_range
+        return self._knee_ramp(value_at_knee, self.detailed_threshold_min)
+
+    @property
+    def effective_adaptive_margin(self) -> float:
+        """Adaptive neighborhood margin after high-sensitivity relief."""
+        return self._knee_ramp(self.adaptive_margin, self.adaptive_margin_min)
 
     @classmethod
     def from_config_dict(cls, config: dict, **overrides) -> "DetectionConfig":
@@ -108,6 +140,9 @@ class DetectionConfig:
             "quick_threshold_range": "quick_threshold_range",
             "detailed_threshold_base": "detailed_threshold_base",
             "detailed_threshold_range": "detailed_threshold_range",
+            "high_sensitivity_knee": "high_sensitivity_knee",
+            "detailed_threshold_min": "detailed_threshold_min",
+            "adaptive_margin_min": "adaptive_margin_min",
             "score_mode": "score_mode",
             "lookahead_frames": "lookahead_frames",
             "adaptive_percentile": "adaptive_percentile",
