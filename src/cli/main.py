@@ -88,7 +88,7 @@ def diagnose_range(input_path: str, time_range: str, config: DetectionConfig):
 
         # Show neighborhood p75 for frames above base threshold
         if row['score'] > config.detailed_threshold:
-            nbhood = row['threshold'] - config.adaptive_margin
+            nbhood = row['threshold'] - config.effective_adaptive_margin
             nbhood_str = f"{nbhood:7.1f}"
         else:
             nbhood_str = "      -"
@@ -347,6 +347,10 @@ def main():
                        help="Dump per-frame scores for a time range, e.g. '16.47-21.10'")
     parser.add_argument("--semantic", action="store_true",
                        help="Enable semantic scene analysis (pHash + color palette) for FP reduction")
+    parser.add_argument("--detailed-threshold-base", type=float, default=None,
+                       help="Override detailed-threshold floor; lower (e.g. 8) catches low-contrast hard cuts")
+    parser.add_argument("--adaptive-margin", type=float, default=None,
+                       help="Override adaptive neighborhood margin; lower (e.g. 8) catches low-contrast hard cuts")
 
     args = parser.parse_args()
 
@@ -361,6 +365,8 @@ def main():
         min_cut_distance=args.min_cut_distance,
         score_mode=args.score_mode,
         use_semantic=args.semantic if args.semantic else None,
+        detailed_threshold_base=args.detailed_threshold_base,
+        adaptive_margin=args.adaptive_margin,
     )
 
     if args.debug:

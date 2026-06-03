@@ -62,6 +62,8 @@ There is no temporal score boost — Phase 3 of the cut-refinement spike replace
 
 Sensitivity (0.0-1.0) inversely scales `quick_threshold` and `detailed_threshold`: higher sensitivity = lower thresholds = more cuts detected.
 
+Above `high_sensitivity_knee` (default 0.7), a **high-sensitivity relief** kicks in: both the `detailed_threshold` floor and the adaptive neighborhood margin ramp down toward `detailed_threshold_min` / `adaptive_margin_min` (default 8/8) as sensitivity → 1.0. At or below the knee, behavior is byte-identical to the plain linear scale, so default/medium runs are unchanged. This exists because the floor otherwise bottoms out at 20 even at max sensitivity, making *low-contrast hard cuts* (visually similar adjacent shots scoring < 20) uncatchable by the sensitivity knob alone. For one-off tuning without raising global sensitivity, `--detailed-threshold-base` and `--adaptive-margin` override the floor and margin directly.
+
 ### Configuration (`src/core/config.py`)
 
 `DetectionConfig` is a single dataclass holding every tunable parameter (thresholds, weights, lookahead, dissolve/fade params, semantic params). It's loaded by `src/cli/main.py` from `config/default_config.json` via `DetectionConfig.from_config_dict()`, with CLI args (`--sensitivity`, `--score-mode`, `--semantic`, `--min-cut-distance`) taking priority over file values. `quick_threshold` and `detailed_threshold` are computed as properties from `sensitivity` and the threshold base/range fields.
